@@ -3,8 +3,10 @@ const express = require('express')
 const cors = require("cors");
 const { MongoClient } = require('mongodb');
 
+// FireBase Admin SDK
 const admin = require("firebase-admin");
-const serviceAccount = require("./doctors-portal-firebase-adminsdk.json");
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVER_SDK);
+console.log(serviceAccount);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
@@ -27,6 +29,20 @@ const dbPass = process.env.DB_PASS;
 const uri = `mongodb+srv://${dbAdmin}:${dbPass}@cluster0.zrm8o.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 
+
+async function verifyToken(req, res, next) {
+  if (req.headers?.authorization?.startsWith("Bearer ")) {
+    const token = req.headers.authorization.split(" ")[1];
+    try {
+      const decodedUser = await admin.auth().verifyIdToken(token);
+      req.decodedEmail = decodedUser.email;
+    }
+    catch {
+      console.log("EOORR");
+    }
+  }
+  next();
+}
 
 async function run() {
   try {
@@ -62,32 +78,54 @@ async function run() {
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email };
-      console.log("Getting Admin Role for",email);
+      console.log("Getting Admin Role for", email);
       const user = await users.findOne(query);
       let isAdmin = false;
-      if(user?.role==="admin"){
+      if (user?.role === "admin") {
         isAdmin = true;
         console.log("Welcome Dear Admin!");
       }
-      else{
+      else {
         console.log("User is not an Admin");
       }
-      res.send({admin:isAdmin});
+      res.send({ admin: isAdmin });
     });
 
 
 
     // Make Admin
-    app.put("/users/admin", async (req, res) => {
+    app.put("/users/admin", verifyToken, async (req, res) => {
       const user = req.body;
-      const token = req.headers.authorization;
-      console.log(token);
-      const filter = { email: user.email }
-      const updateDoc = { $set: { role: "admin" } };
-      const result = await users.updateOne(filter, updateDoc);
-      const { matchedCount, modifiedCount, upsertedCount } = result;
-      console.log("Admin Role Added To User");
-      res.send(result);
+      const requester = req.decodedEmail;
+      if (requester) {
+        const requesterAccount = await users.findOne({ email: requester });
+        if (requesterAccount.role === "admin") {
+          const filter = { email: user.email }
+          const updateDoc = { $set: { role: "admin" } };
+          const result = await users.updateOne(filter, updateDoc);
+          const { matchedCount, modifiedCount } = result;
+          let message = '';
+          if(matchedCount && modifiedCount){
+            message = `${user.email} is now an Admin`;
+            console.log(message);
+          }
+          else if(matchedCount){
+            message = `${user.email} is already an Admin`;
+            console.log(message);
+          }
+          else{
+            message = `${user.email} is not a User`;
+            console.log(message);
+          }
+          res.send({...result,message});
+        }
+      }
+      else{
+        message = "You have no access to make admin";
+        res.status(403).send({message});
+      }
+
+      
     });
 
     // Appoinments : post
