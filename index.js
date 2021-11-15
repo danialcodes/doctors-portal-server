@@ -4,7 +4,7 @@ const cors = require("cors");
 const { MongoClient } = require('mongodb');
 
 const admin = require("firebase-admin");
-const serviceAccount = require("./doctors-portal-eb15e-firebase-adminsdk-au3mv-bbd7e08afb.json");
+const serviceAccount = require("./doctors-portal-firebase-adminsdk.json");
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
