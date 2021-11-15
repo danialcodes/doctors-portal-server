@@ -2,12 +2,22 @@ require('dotenv').config();
 const express = require('express')
 const cors = require("cors");
 const { MongoClient } = require('mongodb');
+
+const admin = require("firebase-admin");
+const serviceAccount = require("./doctors-portal-eb15e-firebase-adminsdk-au3mv-bbd7e08afb.json");
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+
 const port = process.env.PORT || 5000
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.set('json spaces', 2);
+
+
 
 
 const dbAdmin = process.env.DB_USER;
@@ -34,7 +44,7 @@ async function run() {
     //   console.log("New User added To Database");
     //   res.send(result);
     // })
-    
+
     // Users :Upsert : put
     app.put("/users", async (req, res) => {
       const user = req.body;
@@ -47,6 +57,38 @@ async function run() {
       console.log("User upserted To Database");
       res.send(result);
     })
+
+    // Get User Role
+    app.get("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email };
+      console.log("Getting Admin Role for",email);
+      const user = await users.findOne(query);
+      let isAdmin = false;
+      if(user?.role==="admin"){
+        isAdmin = true;
+        console.log("Welcome Dear Admin!");
+      }
+      else{
+        console.log("User is not an Admin");
+      }
+      res.send({admin:isAdmin});
+    });
+
+
+
+    // Make Admin
+    app.put("/users/admin", async (req, res) => {
+      const user = req.body;
+      const token = req.headers.authorization;
+      console.log(token);
+      const filter = { email: user.email }
+      const updateDoc = { $set: { role: "admin" } };
+      const result = await users.updateOne(filter, updateDoc);
+      const { matchedCount, modifiedCount, upsertedCount } = result;
+      console.log("Admin Role Added To User");
+      res.send(result);
+    });
 
     // Appoinments : post
     app.post("/appoinments", async (req, res) => {
