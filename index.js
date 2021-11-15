@@ -161,7 +161,7 @@ run().catch(console.dir);
 
 
 app.get('/', (req, res) => {
-  res.send('Hello World!')
+  res.send('Welcome to DanialCodes - Doctors Portal API')
 })
 
 app.listen(port, () => {
