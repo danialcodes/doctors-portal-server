@@ -81,15 +81,10 @@ async function run() {
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email };
-      console.log("Getting Admin Role for", email);
       const user = await users.findOne(query);
       let isAdmin = false;
       if (user?.role === "admin") {
         isAdmin = true;
-        console.log("Welcome Dear Admin!");
-      }
-      else {
-        console.log("User is not an Admin");
       }
       res.send({ admin: isAdmin });
     });
@@ -106,7 +101,6 @@ async function run() {
 
       const requester = req.decodedEmail;
       if(requester===user.email && user.role ==="r"){
-        console.log("Removing Own");
         message = "You can't remove yourself as an Admin";
         res.send({ message });
       }
@@ -127,15 +121,12 @@ async function run() {
           let message = '';
           if (matchedCount && modifiedCount) {
             message = `${user.email} is now an ${r}`;
-            console.log(message);
           }
           else if (matchedCount) {
             message = `${user.email} is already an ${r}`;
-            console.log(message);
           }
           else {
             message = `${user.email} is not a User`;
-            console.log(message);
           }
           res.send({ ...result, message });
         }
@@ -169,7 +160,6 @@ async function run() {
       // Booking Appionment
       if (slotResult.modifiedCount) {
         const bookingResult = await appoinments.insertOne(newAppoinment);
-        console.log(bookingResult);
         res.send(bookingResult);
       }
       else {
@@ -182,10 +172,9 @@ async function run() {
       const userEmail = req.query.email;
       const date = req.query.date;
       const query = { email: userEmail, date };
-      console.log(req.query);
       const cursor = appoinments.find(query);
       const usersAppoinments = await cursor.toArray();
-      console.log("Sending Appoinments");
+      // console.log("Sending Appoinments");
       res.send(usersAppoinments);
     })
 
@@ -194,7 +183,7 @@ async function run() {
       const query = {};
       const cursor = availableBookings.find(query);
       const slots = await cursor.toArray();
-      console.log("Sending Available Slots");
+      // console.log("Sending Available Slots");
       res.send(slots);
     })
 
