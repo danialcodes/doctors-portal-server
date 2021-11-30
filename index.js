@@ -6,7 +6,6 @@ const { MongoClient } = require('mongodb');
 // FireBase Admin SDK
 const admin = require("firebase-admin");
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVER_SDK);
-console.log(serviceAccount);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
@@ -22,6 +21,7 @@ app.set('json spaces', 2);
 
 
 
+// MongoDB Initialization
 const dbAdmin = process.env.DB_USER;
 const dbPass = process.env.DB_PASS;
 
@@ -29,7 +29,7 @@ const dbPass = process.env.DB_PASS;
 const uri = `mongodb+srv://${dbAdmin}:${dbPass}@cluster0.zrm8o.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 
-
+// JWT Verification
 async function verifyToken(req, res, next) {
   if (req.headers?.authorization?.startsWith("Bearer ")) {
     const token = req.headers.authorization.split(" ")[1];
@@ -38,28 +38,31 @@ async function verifyToken(req, res, next) {
       req.decodedEmail = decodedUser.email;
     }
     catch {
-      console.log("EOORR");
+      console.log("ERROR");
     }
   }
   next();
 }
 
+
 async function run() {
   try {
     await client.connect();
     console.log("Successfully connected to database!!");
+    // Databases
     const database = client.db("doctorsPortal");
+    // Collections
     const appoinments = database.collection("appoinments");
     const users = database.collection("users");
+    const availableBookings = database.collection("availableBookings");
 
 
-    // Users : post
-    // app.post("/users", async (req, res) => {
-    //   const newUser = req.body;
-    //   const result = await users.insertOne(newUser);
-    //   console.log("New User added To Database");
-    //   res.send(result);
-    // })
+    // All User :get
+    app.get("/users", async (req, res) => {
+      const cursor = users.find({});
+      const Allusers = await cursor.toArray();
+      res.send(Allusers);
+    });
 
     // Users :Upsert : put
     app.put("/users", async (req, res) => {
@@ -96,45 +99,84 @@ async function run() {
     // Make Admin
     app.put("/users/admin", verifyToken, async (req, res) => {
       const user = req.body;
+      let r = "Normal User";
+      if(user.role==="a"){
+        r = "Admin";
+      }
+
       const requester = req.decodedEmail;
-      if (requester) {
+      if(requester===user.email && user.role ==="r"){
+        console.log("Removing Own");
+        message = "You can't remove yourself as an Admin";
+        res.send({ message });
+      }
+      else if (requester) {
+
         const requesterAccount = await users.findOne({ email: requester });
         if (requesterAccount.role === "admin") {
+
           const filter = { email: user.email }
-          const updateDoc = { $set: { role: "admin" } };
+          let updateDoc = { $set: { role: "" } };
+          if(user.role==='a'){
+            updateDoc = { $set: { role: "admin" } };
+          }
+          
           const result = await users.updateOne(filter, updateDoc);
+
           const { matchedCount, modifiedCount } = result;
           let message = '';
-          if(matchedCount && modifiedCount){
-            message = `${user.email} is now an Admin`;
+          if (matchedCount && modifiedCount) {
+            message = `${user.email} is now an ${r}`;
             console.log(message);
           }
-          else if(matchedCount){
-            message = `${user.email} is already an Admin`;
+          else if (matchedCount) {
+            message = `${user.email} is already an ${r}`;
             console.log(message);
           }
-          else{
+          else {
             message = `${user.email} is not a User`;
             console.log(message);
           }
-          res.send({...result,message});
+          res.send({ ...result, message });
+        }
+        else {
+          message = "You have no access to make admin";
+          res.status(403).send({ message });
         }
       }
-      else{
+      else {
         message = "You have no access to make admin";
-        res.status(403).send({message});
+        res.status(403).send({ message });
       }
 
-      
+
     });
 
     // Appoinments : post
     app.post("/appoinments", async (req, res) => {
+
       const newAppoinment = req.body;
-      const result = await appoinments.insertOne(newAppoinment);
-      console.log(newAppoinment);
-      res.send(result);
-    })
+      // Slot Space Update
+      const filter = { name: newAppoinment.name, space: { $gt: 0 } };
+      const updateDoc = {
+        $inc:
+        {
+          space: -1
+        }
+      };
+      const slotResult = await availableBookings.updateOne(filter, updateDoc);
+
+      // Booking Appionment
+      if (slotResult.modifiedCount) {
+        const bookingResult = await appoinments.insertOne(newAppoinment);
+        console.log(bookingResult);
+        res.send(bookingResult);
+      }
+      else {
+        res.send({ message: "Not Booked" });
+      }
+    });
+
     // Appoinments : get
     app.get("/appoinments", async (req, res) => {
       const userEmail = req.query.email;
@@ -147,16 +189,23 @@ async function run() {
       res.send(usersAppoinments);
     })
 
+    // Available Slot : Get
+    app.get("/availableslots", async (req, res) => {
+      const query = {};
+      const cursor = availableBookings.find(query);
+      const slots = await cursor.toArray();
+      console.log("Sending Available Slots");
+      res.send(slots);
+    })
 
 
 
-    // const result = await haiku.insertOne(doc);
-    // console.log(`A document was inserted with the _id: ${result.insertedId}`);
 
   } finally {
     // await client.close();
   }
 }
+
 run().catch(console.dir);
 
 
