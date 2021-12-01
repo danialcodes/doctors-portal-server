@@ -1,7 +1,13 @@
 require('dotenv').config();
 const express = require('express')
 const cors = require("cors");
-const { MongoClient } = require('mongodb');
+const { MongoClient, ObjectID } = require('mongodb');
+
+
+// Payment Stripe
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
+
+
 
 // FireBase Admin SDK
 const admin = require("firebase-admin");
@@ -95,12 +101,12 @@ async function run() {
     app.put("/users/admin", verifyToken, async (req, res) => {
       const user = req.body;
       let r = "Normal User";
-      if(user.role==="a"){
+      if (user.role === "a") {
         r = "Admin";
       }
 
       const requester = req.decodedEmail;
-      if(requester===user.email && user.role ==="r"){
+      if (requester === user.email && user.role === "r") {
         message = "You can't remove yourself as an Admin";
         res.send({ message });
       }
@@ -111,10 +117,10 @@ async function run() {
 
           const filter = { email: user.email }
           let updateDoc = { $set: { role: "" } };
-          if(user.role==='a'){
+          if (user.role === 'a') {
             updateDoc = { $set: { role: "admin" } };
           }
-          
+
           const result = await users.updateOne(filter, updateDoc);
 
           const { matchedCount, modifiedCount } = result;
@@ -142,11 +148,23 @@ async function run() {
 
 
     });
+    // Appoinments by specific Id
+    app.get("/appoinments/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: ObjectID(id) };
+      const result = await appoinments.findOne(query);
+      console.log(result);
+      res.send(result)
+    });
+
+
 
     // Appoinments : post
     app.post("/appoinments", async (req, res) => {
 
       const newAppoinment = req.body;
+
+      console.log(req.body);
       // Slot Space Update
       const filter = { name: newAppoinment.name, space: { $gt: 0 } };
       const updateDoc = {
@@ -188,6 +206,25 @@ async function run() {
     })
 
 
+
+    // Payment
+    app.post("/create-payment-intent", async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = paymentInfo.price *100;
+
+      // Create a PaymentIntent with the order amount and currency
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount,
+        currency: "usd",
+        automatic_payment_methods: {
+          enabled: true,
+        },
+      });
+
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
 
 
   } finally {
