@@ -7,7 +7,8 @@ const { MongoClient, ObjectID } = require('mongodb');
 // Payment Stripe
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
-
+// File Upload
+const fileUpload = require("express-fileupload");
 
 // FireBase Admin SDK
 const admin = require("firebase-admin");
@@ -23,7 +24,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.set('json spaces', 2);
-
+app.use(fileUpload());
 
 
 
@@ -61,6 +62,7 @@ async function run() {
     const appoinments = database.collection("appoinments");
     const users = database.collection("users");
     const availableBookings = database.collection("availableBookings");
+    const doctorsCollection = database.collection("doctors");
 
 
     // All User :get
@@ -95,6 +97,23 @@ async function run() {
       res.send({ admin: isAdmin });
     });
 
+
+    // Add Doctor
+    app.post("/doctors", async (req,res)=>{
+      const {name,email} = req.body;
+      const pic = req.files.image.data;
+      const encodedPic = pic.toString('base64');
+      const imageBuffer = Buffer.from(encodedPic,'base64');
+      const doctor = {name,email,image:imageBuffer};
+      const result = await doctorsCollection.insertOne(doctor);
+      res.send(result);
+    });
+    // Get doctors
+    app.get("/doctors", async (req,res)=>{
+      const cursor = doctorsCollection.find({});
+      const doctors = await cursor.toArray();
+      res.send(doctors);
+    })
 
 
     // Make Admin
@@ -210,7 +229,7 @@ async function run() {
     // Payment
     app.post("/create-payment-intent", async (req, res) => {
       const paymentInfo = req.body;
-      const amount = paymentInfo.price *100;
+      const amount = paymentInfo.price * 100;
 
       // Create a PaymentIntent with the order amount and currency
       const paymentIntent = await stripe.paymentIntents.create({
